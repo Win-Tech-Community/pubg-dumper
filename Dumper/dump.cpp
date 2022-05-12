@@ -28,6 +28,11 @@ void print4(const char* var_name, uint32_t offset)
 	printf("constexpr uint32_t %s = 0x%04X;\n", var_name, offset);
 }
 
+void print4(const char* outer_name, const char* var_name)
+{
+	printf("constexpr uint32_t %s = 0x%04X;\n", var_name, dump::find_object(outer_name, var_name).GetOffset());
+}
+
 bool dump::set_static_offsets(const ZydisDecoder& decoder, const uintptr_t start, const uintptr_t end) 
 {
 	auto in_range = [&start, &end](uintptr_t addr)
@@ -81,8 +86,11 @@ bool dump::set_static_offsets(const ZydisDecoder& decoder, const uintptr_t start
 
 		displacement::FName::ElementsPerChunk = *(uint32_t*)(scan[0] + 2);
 
+		printf("namespace FName\n");
+		printf("{\n");
 		print8("Names", displacement::FName::Names);
 		print4("ElementsPerChunk", displacement::FName::ElementsPerChunk);
+		printf("}\n");
 
 		uintptr_t names_ptr = 0;
 
@@ -460,4 +468,109 @@ void dump::dump(const uintptr_t start, const uintptr_t end)
 
 		print4("WeaponIndex", *(uint32_t*)(scan[0] + 3));
 	}
+
+	{
+		uintptr_t func = find_object("TslLivingThing", "GetWorldTimeSeconds").GetFunction() - process::image_base + start;
+		//printf("//Found TslLivingThing.GetWorldTimeSeconds %p\n", func);
+
+		std::vector<uintptr_t> call = utils::find_pattern(
+			func, func + 0x100,
+			"\xE8", "x");
+
+		func = utils::calc_relative(call[0] + 1);
+
+		std::vector<uintptr_t>scan = utils::find_pattern(
+			func, func + 0x100,
+			"\xF3\x0F", "xx");
+
+		print4("TimeSeconds", *(uint32_t*)(scan[0] + 4));
+	}
+
+	print4("World", "CurrentLevel");
+
+	print4("PlayerController", find_object("Player", "CurrentNetSpeed").GetOffset() - 0x8);
+	print4("PlayerController", "AcknowledgedPawn");
+	print4("PlayerController", "SpectatorPawn");
+	print4("PlayerController", "PlayerCameraManager");
+	print4("PlayerController", "InputYawScale");
+
+	print4("PlayerCameraManager", "CameraCache");
+	print4("CameraCacheEntry", "POV");
+	print4("MinimalViewInfo", "FOV");
+	print4("MinimalViewInfo", "Rotation");
+	print4("MinimalViewInfo", "Location");
+
+	print4("Actor", "RootComponent");
+	print4("Actor", "ReplicatedMovement");
+
+	print4("Pawn", "PlayerState");
+
+	print4("Character", "Mesh");
+
+	print4("TslSettings", "BallisticDragScale");
+	print4("TslSettings", "BallisticDropScale");
+
+	print4("TslCharacter", "Health");
+	print4("TslCharacter", "HealthMax");
+	print4("TslCharacter", "GroggyHealth");
+	print4("TslCharacter", "GroggyHealthMax");
+	print4("TslCharacter", "CharacterName");
+	print4("TslCharacter", "LastTeamNum");
+	print4("TslCharacter", "VehicleRiderComponent");
+	print4("TslCharacter", "WeaponProcessor");
+	print4("TslCharacter", "SpectatedCount");
+
+	print4("SceneComponent", "ComponentVelocity");
+	print4("SceneComponent", "AttachParent");
+
+	print4("PrimitiveComponent", "LastSubmitTime");
+	print4("PrimitiveComponent", "LastRenderTimeOnScreen");
+
+	print4("SkeletalMeshComponent", "AnimScriptInstance");
+	print4("StaticMeshComponent", "StaticMesh");
+
+	const int32_t DroppedItem_Item = find_object("DroppedItem", "Item").GetOffset();
+	print4("DroppedItem_Item", DroppedItem_Item);
+
+	const int32_t DroppedItemInteractionComponent_Item = find_object("DroppedItemInteractionComponent", "Item").GetOffset();
+	print4("DroppedItemInteractionComponent_Item", DroppedItemInteractionComponent_Item);
+
+	print4("VehicleRiderComponent", "SeatIndex");
+	print4("VehicleRiderComponent", "LastVehiclePawn");
+
+	print4("WeaponProcessorComponent", "EquippedWeapons");
+
+	print4("TslWeapon", "Mesh3P");
+	print4("TslWeapon", "FiringAttachPoint");
+
+	const int32_t IronSightZeroingDistances =
+		find_object("TslWeapon", "WeaponConfig").GetOffset() +
+		find_object("WeaponData", "IronSightZeroingDistances").GetOffset();
+	print4("IronSightZeroingDistances", IronSightZeroingDistances);
+
+	print4("TslWeapon_Gun", "bAlwaysUseIronSightZeroing");
+	print4("TslWeapon_Gun", "AmmoPerClip");
+	print4("TslWeapon_Gun", "CurrentZeroLevel");
+	print4("TslWeapon_Gun", "CurrentCantedZeroLevel");
+	print4("TslWeapon_Gun", "ScopingAttachPoint");
+
+	print4("TslWeapon_Trajectory", "WeaponTrajectoryData");
+	print4("TslWeapon_Trajectory", "TrajectoryGravityZ");
+
+	print4("TslAnimInstance", "ControlRotation_CP");
+	print4("TslAnimInstance", "RecoilADSRotation_CP");
+	print4("TslAnimInstance", "LeanLeftAlpha_CP");
+	print4("TslAnimInstance", "LeanRightAlpha_CP");
+	print4("TslAnimInstance", "bIsScoping_CP");
+	print4("TslAnimInstance", "bIsReloading_CP");
+
+	print4("WeaponTrajectoryData", "TrajectoryConfig");
+
+	const int32_t ItemPackage_Items = find_object("ItemPackage", "Items").GetOffset();
+	print4("ItemPackage_Items", ItemPackage_Items);
+
+	print4("TslPlayerState", "PlayerStatistics");
+	print4("TslPlayerState", "DamageDealtOnEnemy");
+
+	print4("CurveVector", "FloatCurves");
 }
