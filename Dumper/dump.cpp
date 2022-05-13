@@ -159,7 +159,7 @@ bool dump::set_object_decrytors(const ZydisDecoder& decoder, const uintptr_t sta
 			if (instruction.mnemonic == ZYDIS_MNEMONIC_SHL)
 			{
 				if (instruction.operands[1].imm.value.u == 0x20)
-					++shl_x20_count;			
+					++shl_x20_count;
 			}
 		}
 		else
@@ -176,6 +176,8 @@ bool dump::set_object_decrytors(const ZydisDecoder& decoder, const uintptr_t sta
 		switch (decoded[i].mnemonic)
 		{
 		case ZYDIS_MNEMONIC_SHL:
+			if (!(decoded[i].operands[1].imm.value.u == 0x20 || decoded[i].operands[1].imm.value.u == 0x10))
+				continue;
 			if (shl_count == 0 + shl_skip)
 				utils::set_x64_decryptor(decoded, i, outer_decryptor);
 			else if (shl_count == 1 + shl_skip)
@@ -188,7 +190,7 @@ bool dump::set_object_decrytors(const ZydisDecoder& decoder, const uintptr_t sta
 			break;
 		}
 	}
-	
+
 	if (!outer_decryptor.is_valid())
 	{
 		uintptr_t _target_address = (uintptr_t)decode_end;
