@@ -14,6 +14,6 @@ namespace displacement
 
 	extern uint64_t Offset;
 	extern uint64_t Func;
-	extern uint64_t GUObjectArray;
+	extern uint64_t GObjects;
 	extern uint64_t GWorld;
 }

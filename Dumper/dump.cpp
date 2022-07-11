@@ -7,7 +7,7 @@ uint64_t displacement::FName::Names = 0;
 uint64_t displacement::FName::ElementsPerChunk = 0;
 uint64_t displacement::Offset = 0;
 uint64_t displacement::Func = 0;
-uint64_t displacement::GUObjectArray = 0;
+uint64_t displacement::GObjects = 0;
 uint64_t displacement::GWorld = 0;
 
 pubg::Decryptor64 class_decryptor{};
@@ -47,7 +47,7 @@ bool dump::set_static_offsets(const ZydisDecoder& decoder, const uintptr_t start
 
 		std::vector<uintptr_t>scan = utils::find_pattern(
 			target_address - 0x1000, target_address,
-			"\xE8\x00\x00\x00\x00\x48\x8B\xD8\x48\x85\xC0", "x????xxxxxx");
+			"\xE8\x00\x00\x00\x00\x48\x8B\xD8\x48\x85\xC0\x74\x35", "x????xxxxxxxx");
 
 		if (!scan.size())
 			continue;
@@ -62,9 +62,9 @@ bool dump::set_static_offsets(const ZydisDecoder& decoder, const uintptr_t start
 
 		scan = utils::find_pattern(
 			func, func + 0x100,
-			"\x8B", "x");
+			"\x48\x8B", "xx");
 
-		displacement::GWorld = utils::calc_relative(scan[0] + 2) - start;
+		displacement::GWorld = utils::calc_relative(scan[0] + 3) - start;
 
 		print8("XenuineDecrypt", displacement::XenuineDecrypt);
 		print8("GWorld", displacement::GWorld);
@@ -101,51 +101,37 @@ bool dump::set_static_offsets(const ZydisDecoder& decoder, const uintptr_t start
 		process::rpm((void*)names_ptr, &name_table, sizeof(name_table));
 	}
 
-	// GUObjectArray
+	// GObjets
 	{
 		uintptr_t target_address = utils::find_string_reference_lea(decoder, start, end, "SHOWDEFAULTS", 0), result = 0;
 
 		std::vector<uintptr_t> scan = utils::find_pattern(
 			target_address, target_address + 0x1000000,
-			"\x0f\x8d", "xx");
+			"\x48\x8B\x15\x00\x00\x00\x00\x48\x89\x54\x24\x68", "xxx????xxxxx");
 
-		for (uintptr_t& i : scan) 
-		{
-			result = utils::calc_relative(i + 9);
+		displacement::GObjects = utils::calc_relative(scan[0] + 3) - start;
+		print8("GObjects", displacement::GObjects);
 
-			if ((result & 0xF) != 0x8)
-				continue;
-
-			if (in_range(result))
-			{
-				result -= start;
-				break;
-			}
-		}
-
-		displacement::GUObjectArray = result - 0x18;
-		print8("GUObjectArray", displacement::GUObjectArray);
-
-		object_array = *(pubg::FUObjectArray*)(start + displacement::GUObjectArray);
+		object_array = *(pubg::FUObjectArray*)(start + displacement::GObjects);
 		obj_objects = object_array.ObjObjects;
-	}
+	}	
 
 	return in_range(displacement::XenuineDecrypt + start)
 		&& in_range(displacement::GWorld + start)
 		&& in_range(displacement::FName::Names + start) 
-		&& in_range(displacement::GUObjectArray + start);
+		&& in_range(displacement::GObjects + start);
 }
 
 bool dump::set_object_decrytors(const ZydisDecoder& decoder, const uintptr_t start, const uintptr_t end)
 {
 	uintptr_t target_address = utils::find_string_reference_lea(decoder, start, end, "Failed to find %s %s in %s", 0);
 
-	ZyanU8* decode_start = (ZyanU8*)target_address - 0x200;
+	ZyanU8* decode_start = (ZyanU8*)target_address - 0x400;
 	ZyanU8* decode_end = (ZyanU8*)target_address;
 	ZyanU8* curr_addr = decode_start;
 
 	std::vector<ZydisDecodedInstruction> decoded;
-	size_t shl_x20_count = 0;
+	size_t shl_x10_count = 0, shl_x20_count = 0;
 
 	while (curr_addr < decode_end)
 	{
@@ -158,7 +144,9 @@ bool dump::set_object_decrytors(const ZydisDecoder& decoder, const uintptr_t sta
 
 			if (instruction.mnemonic == ZYDIS_MNEMONIC_SHL)
 			{
-				if (instruction.operands[1].imm.value.u == 0x20)
+				if (instruction.operands[1].imm.value.u == 0x10)
+					++shl_x10_count;
+				else if (instruction.operands[1].imm.value.u == 0x20)
 					++shl_x20_count;
 			}
 		}
@@ -168,7 +156,7 @@ bool dump::set_object_decrytors(const ZydisDecoder& decoder, const uintptr_t sta
 		}
 	}
 
-	size_t shl_skip = shl_x20_count - 2;
+	size_t shl_skip = shl_x10_count - 2 + shl_x20_count - 2;
 	size_t shl_count = 0;
 
 	for (size_t i = 0; i < decoded.size(); ++i) 
@@ -191,6 +179,53 @@ bool dump::set_object_decrytors(const ZydisDecoder& decoder, const uintptr_t sta
 		}
 	}
 
+	if (!name_index_decryptor.is_valid() || !name_number_decryptor.is_valid())
+	{
+		uintptr_t _target_address = (uintptr_t)decode_end;
+		while (*(uint32_t*)++_target_address != name_index_decryptor.xor_key_1) {}
+
+		memset(&name_index_decryptor, 0, sizeof(name_index_decryptor));
+		memset(&name_number_decryptor, 0, sizeof(name_number_decryptor));
+
+		std::vector<ZydisDecodedInstruction> _decoded;
+
+		ZyanU8* _decode_start = (ZyanU8*)_target_address - 0x100;
+		ZyanU8* _decode_end = (ZyanU8*)_target_address + 0x100;
+		ZyanU8* _curr_addr = _decode_start;
+
+		while (_curr_addr < _decode_end)
+		{
+			ZydisDecodedInstruction instruction;
+
+			if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, (void*)_curr_addr, INT_MAX, &instruction)))
+			{
+				_decoded.push_back(instruction);
+				_curr_addr += instruction.length;
+			}
+			else
+			{
+				++_curr_addr;
+			}
+		}
+
+		size_t cnt = 0;
+
+		for (size_t x = 0; x < _decoded.size(); ++x)
+		{
+			if (_decoded[x].mnemonic == ZYDIS_MNEMONIC_SHL
+				&& _decoded[x].operands[1].imm.value.u == 0x10)
+			{
+				++cnt;
+
+				if (cnt == 2)
+				{
+					utils::set_fname_decryptor(_decoded, x, name_index_decryptor, name_number_decryptor);
+					break;
+				}
+			}
+		}
+	}
+
 	if (!outer_decryptor.is_valid())
 	{
 		uintptr_t _target_address = (uintptr_t)decode_end;
@@ -200,8 +235,8 @@ bool dump::set_object_decrytors(const ZydisDecoder& decoder, const uintptr_t sta
 
 		std::vector<ZydisDecodedInstruction> _decoded;
 
-		ZyanU8* _decode_start = (ZyanU8*)_target_address - 50;
-		ZyanU8* _decode_end = (ZyanU8*)_target_address + 50;
+		ZyanU8* _decode_start = (ZyanU8*)_target_address - 0x100;
+		ZyanU8* _decode_end = (ZyanU8*)_target_address + 0x100;
 		ZyanU8* _curr_addr = _decode_start;
 
 		while (_curr_addr < _decode_end)
@@ -221,7 +256,8 @@ bool dump::set_object_decrytors(const ZydisDecoder& decoder, const uintptr_t sta
 
 		for (size_t x = 0; x < _decoded.size(); ++x) 
 		{
-			if (_decoded[x].mnemonic == ZYDIS_MNEMONIC_SHL) 
+			if (_decoded[x].mnemonic == ZYDIS_MNEMONIC_SHL
+				&& _decoded[x].operands[1].imm.value.u == 0x20)
 			{
 				utils::set_x64_decryptor(_decoded, x, outer_decryptor);
 				break;
@@ -242,7 +278,7 @@ pubg::UObject dump::find_object(const char* outer_name, const char* var_name)
 	for (uint32_t i = 0; i < object_array.NumElements; ++i) 
 	{
 		pubg::FUObjectItem item;
-		process::rpm((void*)(obj_objects.Objects + i * sizeof(pubg::FUObjectItem) + 8), &item, sizeof(item));
+		process::rpm((void*)(obj_objects.Objects + i * sizeof(pubg::FUObjectItem)), &item, sizeof(item));
 		if (!item.Object) continue;
 
 		pubg::UObject obj;
@@ -274,9 +310,9 @@ void dump::dump(const uintptr_t start, const uintptr_t end)
 	{
 		pubg::UObject obj = find_object("Player", "CurrentNetSpeed");
 
-		for (uint32_t i = 0; i <= 0x100; i += 0x4) 
+		for (uint16_t i = 0; i <= 0x100; i += 0x4)
 		{
-			uint32_t current = *(uint32_t*)(obj.buf + i);
+			uint16_t current = *(uint16_t*)(obj.buf + i);
 
 			if (current >= 0x30 && current <= 0x50)
 			{
@@ -290,11 +326,11 @@ void dump::dump(const uintptr_t start, const uintptr_t end)
 	{
 		pubg::UObject obj = find_object("SceneComponent", "K2_GetComponentRotation");
 
-		for (uint32_t i = 0x100; i <= 0x200; i += 0x8) 
+		for (uint32_t i = 0; i <= 0x200; i += 0x8) 
 		{
 			uintptr_t current = *(uintptr_t*)(obj.buf + i);
 
-			if (current - process::image_base < process::image_size)
+			if (current > process::image_base && current < process::image_base + process::image_size)
 			{
 				current = current - process::image_base + start;
 

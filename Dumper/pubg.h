@@ -95,7 +95,7 @@ namespace pubg
 	template<typename T>
 	struct EncryptedObject 
 	{
-		static_assert(std::is_same<T, uint32_t>::value | std::is_same<T, uint64_t>::value, "Type error.");
+		static_assert(std::is_same<T, uint64_t>::value, "Type error.");
 
 		T encrypted_obj;
 
@@ -113,9 +113,9 @@ namespace pubg
 
 	struct FNameTable
 	{
-		EncryptedObject<uintptr_t>Chunks;
-		EncryptedObject<uint32_t> NumElements;
-		EncryptedObject<uint32_t> NumChunks;
+		EncryptedObject<uint64_t>Chunks;
+		EncryptedObject<uint64_t> NumElements;
+		EncryptedObject<uint64_t> NumChunks;
 	};
 
 	struct FNameEntry
@@ -206,17 +206,16 @@ namespace pubg
 	struct FUObjectItem 
 	{
 		uintptr_t Object;
-		uintptr_t pad[5];
+		uintptr_t pad[2];
 	};
 
 	struct TUObjectArray 
 	{
-		EncryptedObject<uintptr_t> Objects;
+		EncryptedObject<uint64_t> Objects;
 	};
 
 	struct FUObjectArray 
 	{
-		uintptr_t pad[3];
 		TUObjectArray ObjObjects;
 		EncryptedObject<uint64_t> MaxElements;
 		uint32_t NumElements;
