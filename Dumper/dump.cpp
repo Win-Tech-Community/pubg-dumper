@@ -105,11 +105,25 @@ bool dump::set_static_offsets(const ZydisDecoder& decoder, const uintptr_t start
 	{
 		uintptr_t target_address = utils::find_string_reference_lea(decoder, start, end, "SHOWDEFAULTS", 0), result = 0;
 
-		std::vector<uintptr_t> scan = utils::find_pattern(
-			target_address, target_address + 0x1000000,
-			"\x48\x8B\x15\x00\x00\x00\x00\x48\x89\x54\x24\x68", "xxx????xxxxx");
+		// TslGame.exe+CD0574 - 48 8B 05 25A80A08     - mov rax,[TslGame.exe+8D7ADA0] { (-2023028742) } <- ObjObjects
+        // TslGame.exe+CD057B - 48 89 44 24 48        - mov [rsp+48],rax
 
-		displacement::GObjects = utils::calc_relative(scan[0] + 3) - start;
+		ZyanUSize offset = 0;
+		ZydisDecodedInstruction instruction;
+
+		while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, (void*)(target_address + offset), INT_MAX - offset, &instruction)))
+		{
+			if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV
+				&& instruction.operands[1].mem.base == ZYDIS_REGISTER_RIP
+				&& instruction.operands[1].mem.disp.has_displacement)
+			{
+				displacement::GObjects = target_address + offset + instruction.operands[1].mem.disp.value + instruction.length - start;
+				break;
+			}
+
+			offset += instruction.length;
+		}
+
 		print8("GObjects", displacement::GObjects);
 
 		object_array = *(pubg::FUObjectArray*)(start + displacement::GObjects);
@@ -126,7 +140,7 @@ bool dump::set_object_decrytors(const ZydisDecoder& decoder, const uintptr_t sta
 {
 	uintptr_t target_address = utils::find_string_reference_lea(decoder, start, end, "Failed to find %s %s in %s", 0);
 
-	ZyanU8* decode_start = (ZyanU8*)target_address - 0x400;
+	ZyanU8* decode_start = (ZyanU8*)target_address - 0x500;
 	ZyanU8* decode_end = (ZyanU8*)target_address;
 	ZyanU8* curr_addr = decode_start;
 

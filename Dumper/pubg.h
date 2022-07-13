@@ -95,13 +95,11 @@ namespace pubg
 	template<typename T>
 	struct EncryptedObject 
 	{
-		static_assert(std::is_same<T, uint64_t>::value, "Type error.");
-
-		T encrypted_obj;
+		uint64_t encrypted_obj;
 
 		operator T() const 
 		{ 
-			return (T)xe_decrypt((uint64_t)encrypted_obj);
+			return (T)xe_decrypt(encrypted_obj);
 		}
 	};
 
