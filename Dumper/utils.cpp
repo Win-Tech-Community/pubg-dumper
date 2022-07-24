@@ -76,7 +76,15 @@ std::vector<uintptr_t> utils::find_pattern(const uintptr_t start, const uintptr_
 
 	for (auto c = start; c < end; ++c) 
 	{
-		(mask[n] == '?') ? ++n : (*(uint8_t*)c == (uint8_t)pattern[n]) ? ++n : n = 0;
+		if (mask[n] == '?' || *(uint8_t*)c == (uint8_t)pattern[n])
+			++n;
+		else
+		{
+			n = 0;
+			if (*(uint8_t*)c == (uint8_t)pattern[0])
+				c -= 1;
+		}
+
 		if (n >= mask.size())
 			result.push_back(c - n + 1);
 	}
